@@ -1,0 +1,156 @@
+---
+title: "SocKult Exam2"
+author: "Pernille Nikolajsen"
+date: "22/5/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+#Setting working directory
+setwd("~/Desktop/SocKult Exam/Exam")
+
+#importing data
+library(readxl)
+
+d = read_excel("ASD_data.xlsx")
+
+d[,13:14] = NULL
+
+
+#renaming columns
+colnames(d) <- c('ID', 'Diagnosis','Gender', 'Age', 'Education', 
+                    'Triangles', 'Tasit', 'Digitspan', 'Verbalflu', 'VIQ', 'PIQ', 
+                    'TotIQ')
+
+#Removing NA
+d = d[complete.cases(d),]
+
+#standardized ToM
+d$Triangles = scale(d$Triangles)
+d$Tasit = scale(d$Tasit)
+
+d$Diagnosis =  as.factor(d$Diagnosis)
+d$Diagnosis =  as.numeric(d$Diagnosis)
+library(brms)
+
+```
+
+
+```{r}
+mtri = brm(Diagnosis ~ Triangles, data = d, cores = 2, chain =2, iter = 2000)
+summary(mtri)
+plot(mtri, pars="^b") 
+stanplot(mtri)
+
+mtas = brm(Diagnosis ~ Tasit, data = d, cores = 2, chain =2, iter = 2000)
+summary(mtas)
+stanplot(mtas, type = "dens")
+
+mtt = brm(Diagnosis ~ Triangles + Tasit, data = d, cores = 2, chain =2, iter = 2000)
+summary(mtt)
+stanplot(mtt)
+
+coef(mtri,mtas,mtt)
+
+models =c(mtri,mtas,mtt)
+
+brms::WAIC(mtri,mtas,mtt)
+
+mtri<-add_ic(mtri,ic="waic")
+mtas<-add_ic(mtas,ic="waic")
+mtt<-add_ic(mtt,ic="waic")
+compare_ic(mtri, mtas,mtt, ic = "waic")
+
+brms::model_weights(mtri, mtas, mtt, weights="waic")
+
+plot(marginal_effects(mtt))
+
+```
+
+```{r}
+
+model0 = brm(cbind(Triangles, Tasit) ~ Diagnosis, data = d, cores = 2, chain =2, iter = 2000)
+summary(model0)
+plot(marginal_effects(model0))
+pp_check.foo(model0)
+
+library(bayesplot)
+
+#bad
+model1 = brm(cbind(Triangles, Tasit) ~ Diagnosis + Gender, data = d, cores = 2, chain =2, iter = 2000)
+summary(model1)
+
+#bad
+model2 = brm(cbind(Triangles, Tasit) ~ Diagnosis + Age, data = d, cores = 2, chain =2, iter = 2000)
+summary(model2)
+
+#good for triangles
+model3 = brm(cbind(Triangles, Tasit) ~ Diagnosis + Education, data = d, cores = 2, chain =2, iter = 2000)
+summary(model3)
+
+#ggood for triangles
+model4 = brm(cbind(Triangles, Tasit) ~ Diagnosis + Digitspan, data = d, cores = 2, chain =2, iter = 2000)
+summary(model4)
+
+#semi good for triangles
+model5 = brm(cbind(Triangles, Tasit) ~ Diagnosis + Verbalflu, data = d, cores = 2, chain =2, iter = 2000)
+summary(model5)
+
+#good for triangles
+model6 = brm(cbind(Triangles, Tasit) ~ Diagnosis + VIQ, data = d, cores = 2, chain =2, iter = 2000)
+summary(model6)
+
+#bad
+model7 = brm(cbind(Triangles, Tasit) ~ Diagnosis + PIQ, data = d, cores = 2, chain =2, iter = 2000)
+summary(model7)
+
+#good for triangles
+model8 = brm(cbind(Triangles, Tasit) ~ Diagnosis + TotIQ, data = d, cores = 2, chain =2, iter = 2000)
+summary(model8)
+
+brms::WAIC(model0, model1, model2, model3, model4, model5, model6, model7, model8)
+weights = brms::model_weights(model0, model1, model2, model3, model4, model5, model6, model7, model8, weights="waic")
+
+round(weights, 3)
+
+model9 = brm(cbind(Triangles, Tasit) ~ Diagnosis + PIQ + Digitspan, data = d, cores = 2, chain =2, iter = 2000)
+summary(model9)
+
+model10 = brm(cbind(Triangles, Tasit) ~ Diagnosis + PIQ + Digitspan + VIQ, data = d, cores = 2, chain =2, iter = 2000)
+summary(model10)
+
+brms::WAIC(model0, model7, model9, model10)
+weights2 = brms::model_weights(model0, model7, model9, model10, weights="waic")
+
+round(weights2, 3)
+
+cor(d$Digitspan,d$PIQ)
+
+```
+
+
+```{r}
+
+library(rethinking)
+sim_test1 = rethinking::sim(model9, data = d, n=1e4)
+
+plot(marginal_effects(model9))
+
+```
+
+
+```{r}
+
+library(rethinking)
+sim_test = rethinking::sim(model0, data = d, n=1e4)
+dens(sim_test, col = "red", xlim = c(-3, 3), ylim = c(0,0.8), xlab = " ")
+par(new=TRUE)
+dens(c(d$Triangles, d$Tasit), xlim = c(-3, 3), ylim = c(0,0.8), xlab = "ToM")
+title("Model 0")
+
+```
